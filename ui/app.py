@@ -1,5 +1,30 @@
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import streamlit as st
 from graph import run_pipeline
+
+try:
+    import ollama as ollama_client
+except ImportError:
+    ollama_client = None
+
+
+def get_available_models() -> list[str]:
+    """Return locally pulled Ollama models, falling back to a static list if Ollama is unreachable."""
+    fallback = ["llama3", "llama3.1", "codellama", "mistral", "gemma2"]
+    if ollama_client is None:
+        return fallback
+    try:
+        models = [
+            m["model"] for m in ollama_client.list()["models"]
+            if "embed" not in m["model"].lower()
+        ]
+        return models or fallback
+    except Exception:
+        return fallback
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -44,7 +69,7 @@ with st.sidebar:
     st.header("⚙️ Settings")
     model = st.selectbox(
         "Ollama Model",
-        ["llama3", "llama3.1", "codellama", "mistral", "gemma2"],
+        get_available_models(),
         help="Make sure the model is pulled via: ollama pull <model>",
     )
     st.markdown("---")
@@ -70,24 +95,7 @@ if run_btn:
         st.warning("Please enter a coding task first.")
         st.stop()
 
-    col1, col2, col3 = st.columns(3)
-
-    # Planner
-    with col1:
-        with st.spinner("🧠 Planner thinking..."):
-            plan_placeholder = st.empty()
-
-    # Coder
-    with col2:
-        with st.spinner("💻 Coder writing..."):
-            code_placeholder = st.empty()
-
-    # Debugger
-    with col3:
-        with st.spinner("🐛 Debugger reviewing..."):
-            debug_placeholder = st.empty()
-
-    with st.spinner("Running agent pipeline... this may take a minute on first run."):
+    with st.spinner("🧠 Planning → 💻 Coding → 🐛 Debugging... this may take a minute on first run."):
         result = run_pipeline(user_request, model=model)
 
     # ── Display results ───────────────────────────────────────────────────────
